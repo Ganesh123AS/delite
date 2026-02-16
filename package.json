@@ -1,6 +1,6 @@
 {
   "name": "delite-stringify",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "private": false,
   "description": "A lightweight library for in replace of stringify.",
   "main": "dist/index.cjs",
