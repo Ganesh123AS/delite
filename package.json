@@ -1,10 +1,23 @@
 {
   "name": "delite",
   "version": "0.0.1",
+  "private": false,
   "description": "A lightweight library for in replace of stringify.",
   "main": "dist/index.cjs",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
+  "homepage": "https://github.com/Ganesh123AS/delite#readme",
+  "bugs": {
+    "url": "https://github.com/Ganesh123AS/delite/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Ganesh123AS/delite.git"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
