@@ -1,5 +1,5 @@
 {
-  "name": "delite",
+  "name": "delite-stringify",
   "version": "0.0.1",
   "private": false,
   "description": "A lightweight library for in replace of stringify.",
