@@ -1,85 +1,120 @@
-/* -------------------SERIALIZE------------------- */
+
+/*-----------------------------------------------
+    Custom JSON serializer supporting:
+        - Circular references
+        - BigInt
+        - Symbol
+        - Date
+        - RegExp
+        - Map
+        - Set
+        - Special numeric values (NaN, Infinity, -0)
+-----------------------------------------------*/
+
+/*-----------------------------------------------
+    Design Decisions:
+        - Metadata stored separately (non-invasive JSON)
+        - WeakMap used to avoid memory leaks
+        - Path-based reference tracking
+-----------------------------------------------*/
+
+/*-----------------------------------------------
+    Tradeoffs:
+        - Path string generation increases memory
+        - Prototype chains not preserved
+        - Functions not supported
+-----------------------------------------------*/
+
 
 import { MetaValues, Serialized } from "../types/types";
-
 export function serialize<T>(input: T): Serialized<T> {
   const meta: MetaValues = {};
+
+  /*-----------------------------------------------
+      WeakMap is used instead of Map:
+          - Keys must be objects
+          - Prevents memory leaks (garbage collectible)
+          - We only need lookup, not iteration
+  -----------------------------------------------*/
+
   const seen = new WeakMap<object, string[]>();
 
-  function pathKey(path: string[]) {
-    return path.join(".");
-  }
+  const pathKey = (path: string[]) => path.join(".");
 
   function walk(value: any, path: string[] = []): any {
-    // Circular reference
+    const currentPath = pathKey(path);
+
+    // Circular reference detection
     if (value && typeof value === "object") {
       if (seen.has(value)) {
-        meta[pathKey(path)] = ["Ref", pathKey(seen.get(value)!)];
+        meta[currentPath] = ["Ref", pathKey(seen.get(value)!)];
         return null;
       }
       seen.set(value, path);
     }
 
-    // undefined
+    // Undefined
     if (value === undefined) {
-      meta[pathKey(path)] = ["Undefined"];
+      meta[currentPath] = ["Undefined"];
       return null;
     }
 
     // Numbers
     if (typeof value === "number") {
       if (Number.isNaN(value)) {
-        meta[pathKey(path)] = ["NaN"];
+        meta[currentPath] = ["NaN"];
         return null;
       }
       if (value === Infinity) {
-        meta[pathKey(path)] = ["Infinity"];
+        meta[currentPath] = ["Infinity"];
         return null;
       }
       if (value === -Infinity) {
-        meta[pathKey(path)] = ["-Infinity"];
+        meta[currentPath] = ["-Infinity"];
         return null;
       }
       if (Object.is(value, -0)) {
-        meta[pathKey(path)] = ["-0"];
+        meta[currentPath] = ["-0"];
         return 0;
       }
       return value;
     }
 
-    // BigInt
+    // BigInt (JSON unsupported natively)
     if (typeof value === "bigint") {
-      meta[pathKey(path)] = ["BigInt"];
+      meta[currentPath] = ["BigInt"];
       return value.toString();
     }
 
-    // Symbol
+    // Symbol (description only; identity not preserved)
     if (typeof value === "symbol") {
-      meta[pathKey(path)] = ["Symbol"];
+      meta[currentPath] = ["Symbol"];
       return value.description ?? "";
     }
 
     // Date
     if (value instanceof Date) {
-      meta[pathKey(path)] = ["Date"];
+      meta[currentPath] = ["Date"];
       return value.toISOString();
     }
 
     // RegExp
     if (value instanceof RegExp) {
-      meta[pathKey(path)] = ["RegExp"];
+      meta[currentPath] = ["RegExp"];
       return value.toString();
     }
 
     // Set
     if (value instanceof Set) {
-      meta[pathKey(path)] = ["Set"];
-      return Array.from(value).map((v, i) => walk(v, [...path, String(i)]));
+      meta[currentPath] = ["Set"];
+      return Array.from(value).map((v, i) =>
+        walk(v, [...path, String(i)])
+      );
     }
 
     // Map
     if (value instanceof Map) {
-      meta[pathKey(path)] = ["Map"];
+      meta[currentPath] = ["Map"];
       return Array.from(value.entries()).map(([k, v], i) => [
         walk(k, [...path, "k", String(i)]),
         walk(v, [...path, "v", String(i)])
@@ -88,10 +123,12 @@ export function serialize<T>(input: T): Serialized<T> {
 
     // Array
     if (Array.isArray(value)) {
-      return value.map((v, i) => walk(v, [...path, String(i)]));
+      return value.map((v, i) =>
+        walk(v, [...path, String(i)])
+      );
     }
 
-    // Object
+    // Plain Object
     if (value && typeof value === "object") {
       const out: any = {};
       for (const [key, val] of Object.entries(value)) {

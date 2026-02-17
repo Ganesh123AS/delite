@@ -1,11 +1,27 @@
 /* -------------------TYPES------------------- */
 
-export type MetaValues = Record<string, [string, any?]>;
+export type MetaEntry =
+  | ["Ref", string]
+  | ["Undefined"]
+  | ["NaN"]
+  | ["Infinity"]
+  | ["-Infinity"]
+  | ["-0"]
+  | ["BigInt"]
+  | ["Symbol"]
+  | ["Date"]
+  | ["RegExp"]
+  | ["Set"]
+  | ["Map"];
 
-export type Serialized<T> = {
-    json: any;
-    meta?: {
-        values?: MetaValues;
-        v: number;
-    };
-};
+export interface MetaValues {
+  [path: string]: MetaEntry;
+}
+
+export interface Serialized<T> {
+  json: any;
+  meta?: {
+    values: MetaValues;
+    v: 1;
+  };
+}

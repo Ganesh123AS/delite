@@ -1,44 +1,66 @@
-/* -------------------DESERIALIZE------------------- */
+/*-----------------------------------
+    Deserializer restoring:
+        * Deserializer restoring:
+        * - Circular references
+        * - Object identity
+        * - Special JS types
+-----------------------------------*/
+
+/*-----------------------------------
+    Defensive behavior:
+        * Defensive behavior:
+        * Validates reference paths
+        * Validates RegExp format
+        * Version check
+-----------------------------------*/
 
 import { Serialized } from "../types/types";
 export function deserialize<T>(data: Serialized<T>): T {
-    const { json, meta } = data;
-    const values = meta?.values ?? {};
-    const refs = new Map<string, any>();
+  const { json, meta } = data;
 
-    function walk(value: any, path: string): any {
-        const m = values[path];
+  if (meta && meta.v !== 1) {
+    throw new Error(`Unsupported serialization version: ${meta.v}`);
+  }
 
-        if (m) {
-            const [type, refPath] = m;
+  const values = meta?.values ?? {};
+  const refs = new Map<string, any>();
 
-            switch (type) {
-                case "Ref":
-                    return refs.get(refPath);
+  function walk(value: any, path: string): any {
+    const m = values[path];
 
-                case "Undefined":
-                    return undefined;
+    if (m) {
+      const [type, refPath] = m;
 
-                case "NaN":
-                    return NaN;
+      switch (type) {
+        case "Ref":
+          if (!refs.has(refPath)) {
+            throw new Error(`Invalid reference path: ${refPath}`);
+          }
+          return refs.get(refPath);
 
-                case "Infinity":
-                    return Infinity;
+        case "Undefined":
+          return undefined;
 
-                case "-Infinity":
-                    return -Infinity;
+        case "NaN":
+          return NaN;
 
-                case "-0":
-                    return -0;
+        case "Infinity":
+          return Infinity;
 
-                case "BigInt":
-                    return BigInt(value);
+        case "-Infinity":
+          return -Infinity;
 
-                case "Date":
-                    return new Date(value);
+        case "-0":
+          return -0;
 
-                case "Symbol":
-                    return Symbol(value);
+        case "BigInt":
+          return BigInt(value);
+
+        case "Date":
+          return new Date(value);
+
+        case "Symbol":
+          return Symbol.for(value);
 
                 case "RegExp": {
                     const lastSlash = value.lastIndexOf("/");
@@ -47,49 +69,49 @@ export function deserialize<T>(data: Serialized<T>): T {
                     return new RegExp(body, flags);
                 }
 
-                case "Set": {
-                    const set = new Set(
-                        value.map((v: any, i: number) =>
-                            walk(v, path ? `${path}.${i}` : `${i}`)
-                        )
-                    );
-                    refs.set(path, set);
-                    return set;
-                }
-
-                case "Map": {
-                    const map = new Map(
-                        value.map(([k, v]: any, i: number) => [
-                            walk(k, `${path}.k.${i}`),
-                            walk(v, `${path}.v.${i}`)
-                        ])
-                    );
-                    refs.set(path, map);
-                    return map;
-                }
-            }
+        case "Set": {
+          const set = new Set(
+            value.map((v: any, i: number) =>
+              walk(v, path ? `${path}.${i}` : `${i}`)
+            )
+          );
+          refs.set(path, set);
+          return set;
         }
 
-        if (Array.isArray(value)) {
-            const arr = value.map((v, i) =>
-                walk(v, path ? `${path}.${i}` : `${i}`)
-            );
-            refs.set(path, arr);
-            return arr;
+        case "Map": {
+          const map = new Map(
+            value.map(([k, v]: any, i: number) => [
+              walk(k, `${path}.k.${i}`),
+              walk(v, `${path}.v.${i}`)
+            ])
+          );
+          refs.set(path, map);
+          return map;
         }
-
-        if (value && typeof value === "object") {
-            const obj: any = {};
-            refs.set(path, obj);
-            for (const [key, val] of Object.entries(value)) {
-                const newPath = path ? `${path}.${key}` : key;
-                obj[key] = walk(val, newPath);
-            }
-            return obj;
-        }
-
-        return value;
+      }
     }
 
-    return walk(json, "") as T;
+    if (Array.isArray(value)) {
+      const arr = value.map((v, i) =>
+        walk(v, path ? `${path}.${i}` : `${i}`)
+      );
+      refs.set(path, arr);
+      return arr;
+    }
+
+    if (value && typeof value === "object") {
+      const obj: any = {};
+      refs.set(path, obj);
+      for (const [key, val] of Object.entries(value)) {
+        const newPath = path ? `${path}.${key}` : key;
+        obj[key] = walk(val, newPath);
+      }
+      return obj;
+    }
+
+    return value;
+  }
+
+  return walk(json, "") as T;
 }
